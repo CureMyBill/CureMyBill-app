@@ -236,17 +236,18 @@ div[data-testid="stVerticalBlock"] > div {
     border-radius: 8px !important;
 }
 
-/* Floute le tableau d'audit détaillé (CPT/montants) jusqu'au paiement —
-   on ne peut pas envelopper st.dataframe dans un div classique, donc on
-   cible l'élément qui suit immédiatement notre marqueur invisible. */
-div[data-testid="element-container"]:has(.mb-blur-marker) + div[data-testid="element-container"] {
+/* Floute le tableau d'audit détaillé (CPT/montants) jusqu'au paiement.
+   Technique officielle Streamlit : st.container(key=...) crée une vraie
+   classe CSS stable "st-key-<key>", contrairement aux tests précédents
+   basés sur une structure interne non documentée. */
+.st-key-audit_table_locked {
     filter: blur(6px);
     pointer-events: none;
     user-select: none;
 }
 
 /* Bouton "Generate the letter" — CTA distinct, impossible à manquer */
-div[data-testid="element-container"]:has(.mb-cta-marker) + div[data-testid="element-container"] .stButton > button {
+.st-key-cta_generate_letter .stButton > button {
     background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
     border: none;
     color: white;
@@ -257,7 +258,7 @@ div[data-testid="element-container"]:has(.mb-cta-marker) + div[data-testid="elem
     box-shadow: 0 6px 20px rgba(219, 39, 119, 0.45);
     animation: mb-pulse 2s ease-in-out infinite;
 }
-div[data-testid="element-container"]:has(.mb-cta-marker) + div[data-testid="element-container"] .stButton > button:hover {
+.st-key-cta_generate_letter .stButton > button:hover {
     box-shadow: 0 8px 26px rgba(219, 39, 119, 0.55);
     transform: translateY(-2px) scale(1.02);
 }
@@ -1725,19 +1726,19 @@ if st.session_state.extracted:
             </div>""",
             unsafe_allow_html=True,
         )
-        st.markdown('<span class="mb-blur-marker"></span>', unsafe_allow_html=True)
-        st.dataframe(
-            df.style.apply(highlight_status, axis=1).format(
-                {
-                    "Billed ($)": "${:.2f}",
-                    "Medicare Rate ($)": lambda v: f"${v:.2f}" if pd.notna(v) else "—",
-                    "Difference ($)": lambda v: f"${v:+.2f}" if pd.notna(v) else "—",
-                    "Difference (%)": lambda v: f"{v:+.1f}%" if pd.notna(v) else "—",
-                }
-            ),
-            use_container_width=True,
-            hide_index=True,
-        )
+        with st.container(key="audit_table_locked"):
+            st.dataframe(
+                df.style.apply(highlight_status, axis=1).format(
+                    {
+                        "Billed ($)": "${:.2f}",
+                        "Medicare Rate ($)": lambda v: f"${v:.2f}" if pd.notna(v) else "—",
+                        "Difference ($)": lambda v: f"${v:+.2f}" if pd.notna(v) else "—",
+                        "Difference (%)": lambda v: f"{v:+.1f}%" if pd.notna(v) else "—",
+                    }
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
         st.caption(T("caption_comparison_methodology"))
 
     # ----------------------------------------------------------------
@@ -1753,8 +1754,9 @@ if st.session_state.extracted:
         elif disputable_df.empty:
             st.info(T("info_no_disputable_lines"))
         else:
-            st.markdown('<span class="mb-cta-marker"></span>', unsafe_allow_html=True)
-            if st.button(T("button_generate_letter")):
+            with st.container(key="cta_generate_letter"):
+                letter_button_clicked = st.button(T("button_generate_letter"))
+            if letter_button_clicked:
                 if not api_key:
                     st.error(T("err_need_api_key"))
                 else:
