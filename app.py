@@ -235,6 +235,36 @@ div[data-testid="stVerticalBlock"] > div {
 .stTextInput input, .stTextArea textarea {
     border-radius: 8px !important;
 }
+
+/* Floute le tableau d'audit détaillé (CPT/montants) jusqu'au paiement —
+   on ne peut pas envelopper st.dataframe dans un div classique, donc on
+   cible l'élément qui suit immédiatement notre marqueur invisible. */
+div[data-testid="element-container"]:has(.mb-blur-marker) + div[data-testid="element-container"] {
+    filter: blur(6px);
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Bouton "Generate the letter" — CTA distinct, impossible à manquer */
+div[data-testid="element-container"]:has(.mb-cta-marker) + div[data-testid="element-container"] .stButton > button {
+    background: linear-gradient(135deg, #ec4899 0%, #db2777 100%);
+    border: none;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 800;
+    padding: 0.9rem 2.2rem;
+    border-radius: 14px;
+    box-shadow: 0 6px 20px rgba(219, 39, 119, 0.45);
+    animation: mb-pulse 2s ease-in-out infinite;
+}
+div[data-testid="element-container"]:has(.mb-cta-marker) + div[data-testid="element-container"] .stButton > button:hover {
+    box-shadow: 0 8px 26px rgba(219, 39, 119, 0.55);
+    transform: translateY(-2px) scale(1.02);
+}
+@keyframes mb-pulse {
+    0%, 100% { box-shadow: 0 6px 20px rgba(219, 39, 119, 0.45); }
+    50% { box-shadow: 0 6px 28px rgba(219, 39, 119, 0.7); }
+}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -337,10 +367,11 @@ if not st.session_state.legal_accepted:
 
 UI_TEXT = {
     "en": {
-        "sidebar_api_label": "Anthropic API Key",
+        "sidebar_api_label": "API Key",
         "sidebar_api_placeholder": "sk-ant-...",
         "sidebar_api_help": "Your key is never stored — it only stays in memory for this session.",
         "api_key_from_env": "✅ API key loaded from the ANTHROPIC_API_KEY environment variable.",
+        "settings_panel_label": "⚙️ Settings",
         "sidebar_how_title": "**How it works**",
         "sidebar_how_steps": (
             "1. Upload a bill (PDF/image)\n"
@@ -388,6 +419,7 @@ UI_TEXT = {
         "stat_total_billed": "Total billed",
         "stat_outlier_amount": "Gap on the most suspicious lines",
         "stat_outlier_count": "Lines far above the norm",
+        "table_lock_label": "Itemized audit locked — unlock below to see exact codes & amounts",
         "caption_comparison_methodology": (
             "Comparison against the official national Medicare rate (a "
             "public, citable benchmark). A hospital normally bills several "
@@ -477,10 +509,11 @@ UI_TEXT = {
         "addon_download_phone_pdf": "⬇️ Download the phone script as PDF",
     },
     "es": {
-        "sidebar_api_label": "Clave API de Anthropic",
+        "sidebar_api_label": "Clave API",
         "sidebar_api_placeholder": "sk-ant-...",
         "sidebar_api_help": "Tu clave nunca se guarda — permanece solo en memoria durante esta sesión.",
         "api_key_from_env": "✅ Clave API cargada desde la variable de entorno ANTHROPIC_API_KEY.",
+        "settings_panel_label": "⚙️ Configuración",
         "sidebar_how_title": "**Cómo funciona**",
         "sidebar_how_steps": (
             "1. Sube una factura (PDF/imagen)\n"
@@ -530,6 +563,7 @@ UI_TEXT = {
         "stat_total_billed": "Total facturado",
         "stat_outlier_amount": "Diferencia en las líneas más sospechosas",
         "stat_outlier_count": "Líneas muy por encima de lo normal",
+        "table_lock_label": "Auditoría detallada bloqueada — desbloquee abajo para ver códigos y montos exactos",
         "caption_comparison_methodology": (
             "Comparación con la tarifa nacional oficial de Medicare (una "
             "referencia pública y citable). Un hospital normalmente "
@@ -1370,7 +1404,7 @@ with top_right:
         st.session_state.app_lang = new_lang
         st.rerun()
 
-with st.expander(f"{T('sidebar_api_label')} / " + T("sidebar_how_title").strip("*")):
+with st.expander(T("settings_panel_label")):
     _env_api_key = get_configured_api_key()
     if _env_api_key:
         st.success(T("api_key_from_env"))
@@ -1681,6 +1715,17 @@ if st.session_state.extracted:
             }.get(row["Status"], "")
             return [color] * len(row)
 
+        st.markdown(
+            f"""<div style="text-align:center; margin-bottom:10px;">
+            <span style="font-weight:700; color:#111827; background:#f3f4f6;
+                         padding:0.5rem 1rem; border-radius:999px; display:inline-flex;
+                         align-items:center; gap:6px;">
+                {svg_icon('lock', 16)} {T('table_lock_label')}
+            </span>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+        st.markdown('<span class="mb-blur-marker"></span>', unsafe_allow_html=True)
         st.dataframe(
             df.style.apply(highlight_status, axis=1).format(
                 {
@@ -1708,6 +1753,7 @@ if st.session_state.extracted:
         elif disputable_df.empty:
             st.info(T("info_no_disputable_lines"))
         else:
+            st.markdown('<span class="mb-cta-marker"></span>', unsafe_allow_html=True)
             if st.button(T("button_generate_letter")):
                 if not api_key:
                     st.error(T("err_need_api_key"))
