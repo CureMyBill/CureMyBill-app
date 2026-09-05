@@ -369,9 +369,9 @@ if not st.session_state.legal_accepted:
 UI_TEXT = {
     "en": {
         "sidebar_api_label": "API Key",
-        "sidebar_api_placeholder": "sk-ant-...",
+        "sidebar_api_placeholder": "Enter your API key",
         "sidebar_api_help": "Your key is never stored — it only stays in memory for this session.",
-        "api_key_from_env": "✅ API key loaded from the ANTHROPIC_API_KEY environment variable.",
+        "api_key_from_env": "✅ API key loaded automatically.",
         "settings_panel_label": "⚙️ Settings",
         "sidebar_how_title": "**How it works**",
         "sidebar_how_steps": (
@@ -394,7 +394,7 @@ UI_TEXT = {
         ),
         "upload_label": "Drop your medical bill (PDF, PNG, or JPG)",
         "analyze_button": "🔍 Analyze the bill",
-        "err_need_api_key": "Please enter your Anthropic API key in the sidebar.",
+        "err_need_api_key": "Please configure the API key in Settings above.",
         "spinner_reading": "Reading the bill...",
         "err_bad_json": (
             "We couldn't parse a usable result. Try again, or check that "
@@ -511,9 +511,9 @@ UI_TEXT = {
     },
     "es": {
         "sidebar_api_label": "Clave API",
-        "sidebar_api_placeholder": "sk-ant-...",
+        "sidebar_api_placeholder": "Ingrese su clave API",
         "sidebar_api_help": "Tu clave nunca se guarda — permanece solo en memoria durante esta sesión.",
-        "api_key_from_env": "✅ Clave API cargada desde la variable de entorno ANTHROPIC_API_KEY.",
+        "api_key_from_env": "✅ Clave API cargada automáticamente.",
         "settings_panel_label": "⚙️ Configuración",
         "sidebar_how_title": "**Cómo funciona**",
         "sidebar_how_steps": (
@@ -537,7 +537,7 @@ UI_TEXT = {
         ),
         "upload_label": "Suba su factura médica (PDF, PNG o JPG)",
         "analyze_button": "🔍 Analizar la factura",
-        "err_need_api_key": "Por favor ingrese su clave API de Anthropic en la barra lateral.",
+        "err_need_api_key": "Por favor configure la clave API en Configuración arriba.",
         "spinner_reading": "Leyendo la factura...",
         "err_bad_json": (
             "No se pudo procesar un resultado utilizable. Intente de "
