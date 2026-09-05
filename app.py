@@ -191,6 +191,50 @@ section[data-testid="stSidebar"] { display: none; }
     transform: translateY(-1px);
     box-shadow: 0 4px 10px rgba(0,0,0,0.12);
 }
+
+/* Bouton principal (type="primary") : gros, visible, impossible à rater */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border: none;
+    color: white;
+    font-size: 1.05rem;
+    font-weight: 700;
+    padding: 0.75rem 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+}
+.stButton > button[kind="primary"]:hover {
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+    transform: translateY(-2px);
+}
+.stButton > button[kind="primary"]:disabled {
+    background: #d1d5db;
+    color: #6b7280;
+    box-shadow: none;
+}
+
+/* Contrainte de largeur + centrage, pour éviter que tout s'éparpille sur grand écran */
+.block-container {
+    max-width: 1100px;
+    padding-top: 1.5rem;
+    padding-bottom: 2rem;
+    margin: 0 auto;
+}
+
+/* Resserre l'espace vertical par défaut entre les blocs Streamlit */
+div[data-testid="stVerticalBlock"] > div {
+    gap: 0.5rem;
+}
+
+/* Champs de formulaire : libellés bien lisibles */
+.stTextInput label, .stSelectbox label, .stTextArea label {
+    color: #111827 !important;
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+}
+.stTextInput input, .stTextArea textarea {
+    border-radius: 8px !important;
+}
 </style>
 """
 st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
@@ -245,44 +289,39 @@ def render_entry_gate() -> None:
     if "app_lang" not in st.session_state:
         st.session_state.app_lang = "en"
 
-    st.markdown(
-        """
-        <div style="max-width: 560px; margin: 3rem auto 0 auto; text-align:center;">
-        """,
-        unsafe_allow_html=True,
-    )
+    _, gate_col, _ = st.columns([1, 2, 1])
+    with gate_col:
+        st.write("")
+        st.write("")
+        lang_choice = st.radio(
+            "Language / Idioma",
+            options=["en", "es"],
+            format_func=lambda v: "English (US)" if v == "en" else "Español",
+            horizontal=True,
+            index=0 if st.session_state.app_lang == "en" else 1,
+            label_visibility="collapsed",
+        )
+        st.session_state.app_lang = lang_choice
+        t = _GATE_TEXT[lang_choice]
 
-    lang_choice = st.radio(
-        "Language / Idioma",
-        options=["en", "es"],
-        format_func=lambda v: "English (US)" if v == "en" else "Español",
-        horizontal=True,
-        index=0 if st.session_state.app_lang == "en" else 1,
-        label_visibility="collapsed",
-    )
-    st.session_state.app_lang = lang_choice
-    t = _GATE_TEXT[lang_choice]
+        st.markdown(f"## 🩺 {t['title']}")
+        st.markdown(f"<p style='color:#6b7280;'>{t['subtitle']}</p>", unsafe_allow_html=True)
 
-    st.markdown(f"## 🩺 {t['title']}")
-    st.markdown(f"<p style='color:#6b7280;'>{t['subtitle']}</p>", unsafe_allow_html=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+        with st.container(border=True):
+            email = st.text_input(t["email_label"], placeholder=t["email_placeholder"])
+            st.info(t["disclaimer"])
+            accepted = st.checkbox(t["checkbox"])
 
-    st.markdown('<div class="mb-card" style="max-width: 560px; margin: 1rem auto;">', unsafe_allow_html=True)
-    email = st.text_input(t["email_label"], placeholder=t["email_placeholder"])
-    st.info(t["disclaimer"])
-    accepted = st.checkbox(t["checkbox"])
-
-    if st.button(t["continue"], type="primary", use_container_width=True):
-        email_valid = bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email or ""))
-        if not email_valid:
-            st.error(t["email_error"])
-        elif not accepted:
-            st.error(t["checkbox_error"])
-        else:
-            st.session_state.legal_accepted = True
-            st.session_state.user_email = email
-            st.rerun()
-    st.markdown("</div>", unsafe_allow_html=True)
+            if st.button(t["continue"], type="primary", use_container_width=True):
+                email_valid = bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email or ""))
+                if not email_valid:
+                    st.error(t["email_error"])
+                elif not accepted:
+                    st.error(t["checkbox_error"])
+                else:
+                    st.session_state.legal_accepted = True
+                    st.session_state.user_email = email
+                    st.rerun()
 
 
 if "legal_accepted" not in st.session_state:
@@ -631,6 +670,20 @@ def render_section_header(icon_name: str, text: str, emoji_to_strip: str = "") -
         </h3>""",
         unsafe_allow_html=True,
     )
+
+
+def get_configured_api_key() -> str:
+    """Look for the Anthropic API key in, in order:
+    1. Streamlit Cloud's Secrets (Settings > Secrets, once deployed)
+    2. A local ANTHROPIC_API_KEY environment variable (local dev)
+    Returns "" if neither is set, so the user can type it in manually.
+    """
+    try:
+        if "ANTHROPIC_API_KEY" in st.secrets:
+            return st.secrets["ANTHROPIC_API_KEY"]
+    except Exception:
+        pass  # No secrets.toml locally — that's expected, not an error.
+    return os.getenv("ANTHROPIC_API_KEY", "")
 
 
 def render_step_bar(current_step: int) -> None:
@@ -1318,7 +1371,7 @@ with top_right:
         st.rerun()
 
 with st.expander(f"{T('sidebar_api_label')} / " + T("sidebar_how_title").strip("*")):
-    _env_api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    _env_api_key = get_configured_api_key()
     if _env_api_key:
         st.success(T("api_key_from_env"))
         api_key = _env_api_key
@@ -1446,30 +1499,29 @@ else:
     _current_step = 1
 render_step_bar(_current_step)
 
-st.markdown('<div class="mb-card">', unsafe_allow_html=True)
-uploaded_file = st.file_uploader(
-    T("upload_label"),
-    type=["pdf", "png", "jpg", "jpeg"],
-)
-st.session_state.uploaded_this_run = uploaded_file is not None
-col_a, col_b = st.columns([2, 1])
-with col_a:
-    analyze_clicked = st.button(T("analyze_button"), type="primary", disabled=not uploaded_file)
-with col_b:
-    demo_clicked = st.button(T("demo_button"))
-st.caption(T("demo_caption"))
-st.markdown(
-    f"""
-    <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:0.6rem;
-                font-size:0.78rem; color:#6b7280;">
-        <span>{T('badge_no_storage')}</span>
-        <span>{T('badge_https')}</span>
-        <span>{T('badge_free_scan')}</span>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-st.markdown("</div>", unsafe_allow_html=True)
+with st.container(border=True):
+    uploaded_file = st.file_uploader(
+        T("upload_label"),
+        type=["pdf", "png", "jpg", "jpeg"],
+    )
+    st.session_state.uploaded_this_run = uploaded_file is not None
+    col_a, col_b = st.columns([2, 1])
+    with col_a:
+        analyze_clicked = st.button(T("analyze_button"), type="primary", disabled=not uploaded_file)
+    with col_b:
+        demo_clicked = st.button(T("demo_button"))
+    st.caption(T("demo_caption"))
+    st.markdown(
+        f"""
+        <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:0.6rem;
+                    font-size:0.78rem; color:#6b7280;">
+            <span>{T('badge_no_storage')}</span>
+            <span>{T('badge_https')}</span>
+            <span>{T('badge_free_scan')}</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 if demo_clicked:
     sample_extracted = {
@@ -1565,37 +1617,36 @@ if st.session_state.extracted:
     extracted = st.session_state.extracted
     df = st.session_state.comparison_df
 
-    st.markdown('<div class="mb-card">', unsafe_allow_html=True)
-    render_section_header("document", T("section_bill_info_title"), "📄")
-    st.caption(T("caption_bill_info"))
+    with st.container(border=True):
+        render_section_header("document", T("section_bill_info_title"), "📄")
+        st.caption(T("caption_bill_info"))
 
-    fc1, fc2 = st.columns(2)
-    with fc1:
-        patient_name = st.text_input(T("label_patient_name"), value=extracted.get("patient_name") or "")
-        provider_name = st.text_input(T("label_provider_name"), value=extracted.get("provider_name") or "")
-        provider_address = st.text_input(
-            T("label_provider_address"), value=extracted.get("provider_address") or ""
+        fc1, fc2 = st.columns(2)
+        with fc1:
+            patient_name = st.text_input(T("label_patient_name"), value=extracted.get("patient_name") or "")
+            provider_name = st.text_input(T("label_provider_name"), value=extracted.get("provider_name") or "")
+            provider_address = st.text_input(
+                T("label_provider_address"), value=extracted.get("provider_address") or ""
+            )
+        with fc2:
+            account_number = st.text_input(
+                T("label_account_number"), value=extracted.get("account_number") or ""
+            )
+            bill_date = st.text_input(T("label_bill_date"), value=extracted.get("bill_date") or "")
+
+        st.markdown(T("label_sender_title"))
+        sc1, sc2, sc3 = st.columns(3)
+        with sc1:
+            sender_name = st.text_input(T("label_sender_name"), value=patient_name)
+        with sc2:
+            sender_address = st.text_input(T("label_sender_address"))
+        with sc3:
+            sender_city_state_zip = st.text_input(T("label_sender_city_state_zip"))
+
+        letter_date = st.text_input(
+            T("label_letter_date"), value=pd.Timestamp.today().strftime("%B %d, %Y")
         )
-    with fc2:
-        account_number = st.text_input(
-            T("label_account_number"), value=extracted.get("account_number") or ""
-        )
-        bill_date = st.text_input(T("label_bill_date"), value=extracted.get("bill_date") or "")
 
-    st.markdown(T("label_sender_title"))
-    sc1, sc2, sc3 = st.columns(3)
-    with sc1:
-        sender_name = st.text_input(T("label_sender_name"), value=patient_name)
-    with sc2:
-        sender_address = st.text_input(T("label_sender_address"))
-    with sc3:
-        sender_city_state_zip = st.text_input(T("label_sender_city_state_zip"))
-
-    letter_date = st.text_input(
-        T("label_letter_date"), value=pd.Timestamp.today().strftime("%B %d, %Y")
-    )
-
-    st.markdown("</div>", unsafe_allow_html=True)
 
     total_billed = df["Billed ($)"].sum()
     outlier_df = df[df["Status"] == "Well above typical — worth disputing"]
@@ -1604,288 +1655,285 @@ if st.session_state.extracted:
         outlier_df["Difference ($)"].clip(lower=0).sum() if not outlier_df.empty else 0
     )
 
-    st.markdown('<div class="mb-card">', unsafe_allow_html=True)
-    render_section_header("scale", T("section_comparison_title"), "💰")
+    with st.container(border=True):
+        render_section_header("scale", T("section_comparison_title"), "💰")
 
-    s1, s2, s3 = st.columns(3)
-    with s1:
-        render_count_up_stat(f"${total_billed:,.2f}", T("stat_total_billed"))
-    with s2:
-        render_count_up_stat(
-            f"${total_outlier_amount:,.2f}",
-            T("stat_outlier_amount"),
-            css_class="mb-stat danger",
+        s1, s2, s3 = st.columns(3)
+        with s1:
+            render_count_up_stat(f"${total_billed:,.2f}", T("stat_total_billed"))
+        with s2:
+            render_count_up_stat(
+                f"${total_outlier_amount:,.2f}",
+                T("stat_outlier_amount"),
+                css_class="mb-stat danger",
+            )
+        with s3:
+            render_count_up_stat(str(len(outlier_df)), T("stat_outlier_count"))
+
+        st.write("")
+
+        def highlight_status(row):
+            color = {
+                "Well above typical — worth disputing": "background-color: #fef2f2; color:#dc2626;",
+                "Above typical markup": "background-color: #fffbeb; color:#b45309;",
+                "Typical range": "background-color: #ecfdf5; color:#059669;",
+                "No reference": "background-color: #f9fafb; color:#6b7280;",
+            }.get(row["Status"], "")
+            return [color] * len(row)
+
+        st.dataframe(
+            df.style.apply(highlight_status, axis=1).format(
+                {
+                    "Billed ($)": "${:.2f}",
+                    "Medicare Rate ($)": lambda v: f"${v:.2f}" if pd.notna(v) else "—",
+                    "Difference ($)": lambda v: f"${v:+.2f}" if pd.notna(v) else "—",
+                    "Difference (%)": lambda v: f"{v:+.1f}%" if pd.notna(v) else "—",
+                }
+            ),
+            use_container_width=True,
+            hide_index=True,
         )
-    with s3:
-        render_count_up_stat(str(len(outlier_df)), T("stat_outlier_count"))
-
-    st.write("")
-
-    def highlight_status(row):
-        color = {
-            "Well above typical — worth disputing": "background-color: #fef2f2; color:#dc2626;",
-            "Above typical markup": "background-color: #fffbeb; color:#b45309;",
-            "Typical range": "background-color: #ecfdf5; color:#059669;",
-            "No reference": "background-color: #f9fafb; color:#6b7280;",
-        }.get(row["Status"], "")
-        return [color] * len(row)
-
-    st.dataframe(
-        df.style.apply(highlight_status, axis=1).format(
-            {
-                "Billed ($)": "${:.2f}",
-                "Medicare Rate ($)": lambda v: f"${v:.2f}" if pd.notna(v) else "—",
-                "Difference ($)": lambda v: f"${v:+.2f}" if pd.notna(v) else "—",
-                "Difference (%)": lambda v: f"{v:+.1f}%" if pd.notna(v) else "—",
-            }
-        ),
-        use_container_width=True,
-        hide_index=True,
-    )
-    st.caption(T("caption_comparison_methodology"))
-    st.markdown("</div>", unsafe_allow_html=True)
+        st.caption(T("caption_comparison_methodology"))
 
     # ----------------------------------------------------------------
     # Lettre de contestation
     # ----------------------------------------------------------------
-    st.markdown('<div class="mb-card">', unsafe_allow_html=True)
-    render_section_header("mail", T("section_letter_title"), "✉️")
+    with st.container(border=True):
+        render_section_header("mail", T("section_letter_title"), "✉️")
 
-    disputable_df = df[df["Status"] == "Well above typical — worth disputing"]
+        disputable_df = df[df["Status"] == "Well above typical — worth disputing"]
 
-    if disputable_df.empty and not elevated_df.empty:
-        st.info(T("info_no_elevated_lines"))
-    elif disputable_df.empty:
-        st.info(T("info_no_disputable_lines"))
-    else:
-        if st.button(T("button_generate_letter")):
-            if not api_key:
-                st.error(T("err_need_api_key"))
-            else:
-                try:
-                    client = Anthropic(api_key=api_key)
-                    with st.spinner(T("spinner_writing_letter")):
-                        letter = generate_dispute_letter(
-                            client,
-                            sender_name,
-                            sender_address,
-                            sender_city_state_zip,
-                            provider_name,
-                            provider_address,
-                            patient_name,
-                            account_number,
-                            bill_date,
-                            letter_date,
-                            disputable_df,
-                        )
-                    st.session_state.letter = letter
-                    sync_audit_to_store()
-                except Exception as e:
-                    st.error(T("err_letter_generation").format(e=e))
+        if disputable_df.empty and not elevated_df.empty:
+            st.info(T("info_no_elevated_lines"))
+        elif disputable_df.empty:
+            st.info(T("info_no_disputable_lines"))
+        else:
+            if st.button(T("button_generate_letter")):
+                if not api_key:
+                    st.error(T("err_need_api_key"))
+                else:
+                    try:
+                        client = Anthropic(api_key=api_key)
+                        with st.spinner(T("spinner_writing_letter")):
+                            letter = generate_dispute_letter(
+                                client,
+                                sender_name,
+                                sender_address,
+                                sender_city_state_zip,
+                                provider_name,
+                                provider_address,
+                                patient_name,
+                                account_number,
+                                bill_date,
+                                letter_date,
+                                disputable_df,
+                            )
+                        st.session_state.letter = letter
+                        sync_audit_to_store()
+                    except Exception as e:
+                        st.error(T("err_letter_generation").format(e=e))
 
-        if st.session_state.letter:
-            if not st.session_state.payment_confirmed:
-                # ---- Paywall: blurred preview + Paddle pricing cards ----
-                preview_lines = st.session_state.letter.strip().split("\n")
-                teaser = next((l for l in preview_lines if l.strip()), "")
-                st.markdown(
-                    f'<p style="font-style: italic; color:#4b5563;">"{teaser} …"</p>',
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    f"""
-                    <div style="position:relative; border-radius:10px; overflow:hidden;">
-                        <div style="filter: blur(5px); user-select:none; pointer-events:none;
-                                    background:#f9fafb; padding:1.2rem; border-radius:10px;
-                                    max-height:220px; overflow:hidden; white-space:pre-wrap;
-                                    font-family: Georgia, serif; font-size:0.9rem; color:#374151;">
-{xml_escape(st.session_state.letter)}
+            if st.session_state.letter:
+                if not st.session_state.payment_confirmed:
+                    # ---- Paywall: blurred preview + Paddle pricing cards ----
+                    preview_lines = st.session_state.letter.strip().split("\n")
+                    teaser = next((l for l in preview_lines if l.strip()), "")
+                    st.markdown(
+                        f'<p style="font-style: italic; color:#4b5563;">"{teaser} …"</p>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f"""
+                        <div style="position:relative; border-radius:10px; overflow:hidden;">
+                            <div style="filter: blur(5px); user-select:none; pointer-events:none;
+                                        background:#f9fafb; padding:1.2rem; border-radius:10px;
+                                        max-height:220px; overflow:hidden; white-space:pre-wrap;
+                                        font-family: Georgia, serif; font-size:0.9rem; color:#374151;">
+    {xml_escape(st.session_state.letter)}
+                            </div>
+                            <div style="position:absolute; inset:0; display:flex; align-items:center;
+                                        justify-content:center; background:rgba(255,255,255,0.35);">
+                                <span style="font-weight:700; color:#111827; background:white;
+                                             padding:0.5rem 1rem; border-radius:999px;
+                                             box-shadow:0 2px 8px rgba(0,0,0,0.15);
+                                             display:inline-flex; align-items:center; gap:6px;">
+                                    {svg_icon('lock', 16)} {T('lock_label').replace('🔒', '').strip()}
+                                </span>
+                            </div>
                         </div>
-                        <div style="position:absolute; inset:0; display:flex; align-items:center;
-                                    justify-content:center; background:rgba(255,255,255,0.35);">
-                            <span style="font-weight:700; color:#111827; background:white;
-                                         padding:0.5rem 1rem; border-radius:999px;
-                                         box-shadow:0 2px 8px rgba(0,0,0,0.15);
-                                         display:inline-flex; align-items:center; gap:6px;">
-                                {svg_icon('lock', 16)} {T('lock_label').replace('🔒', '').strip()}
-                            </span>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                st.write("")
-                st.markdown(T("unlock_cta"))
-                try:
-                    pdf_bytes_for_widget = generate_pdf_letter(st.session_state.letter)
-                    pdf_b64_for_widget = base64.b64encode(pdf_bytes_for_widget).decode("utf-8")
-                    components.html(
-                        render_paddle_pricing_widget(
-                            pdf_b64_for_widget, st.session_state.get("app_lang", "en")
-                        ),
-                        height=650,
+                        """,
+                        unsafe_allow_html=True,
                     )
-                except Exception as e:
-                    st.error(T("err_pdf_generation").format(e=e))
-                st.caption(T("caption_payment_security"))
-            else:
-                # ---- Unlocked: full letter + PDF download ----
-                st.success(T("success_unlocked").format(plan=st.session_state.paid_plan or "standard"))
-                st.text_area(T("label_letter_generated"), st.session_state.letter, height=420)
-                try:
-                    pdf_bytes = generate_pdf_letter(st.session_state.letter)
-                    st.download_button(
-                        T("download_button_pdf"),
-                        data=pdf_bytes,
-                        file_name="dispute_letter.pdf",
-                        mime="application/pdf",
-                        type="primary",
-                    )
-                except Exception as e:
-                    st.error(T("err_pdf_generation").format(e=e))
-                    st.download_button(
-                        T("download_button_txt_fallback"),
-                        data=st.session_state.letter,
-                        file_name="dispute_letter.txt",
-                        mime="text/plain",
-                    )
-
-                if st.session_state.paid_plan == "pro":
-                    st.markdown("---")
-                    st.markdown(T("pro_section_title"))
-                    if st.button(T("button_generate_followup")):
-                        if not api_key:
-                            st.error(T("err_need_api_key"))
-                        else:
-                            try:
-                                client = Anthropic(api_key=api_key)
-                                with st.spinner(T("spinner_writing_letter")):
-                                    followup = generate_followup_letter(
-                                        client, st.session_state.letter, letter_date
-                                    )
-                                st.session_state.followup_letter = followup
-                                sync_audit_to_store()
-                            except Exception as e:
-                                st.error(T("err_followup_generation").format(e=e))
-
-                    if st.session_state.get("followup_letter"):
-                        st.text_area(
-                            T("label_followup_generated"),
-                            st.session_state.followup_letter,
-                            height=350,
+                    st.write("")
+                    st.markdown(T("unlock_cta"))
+                    try:
+                        pdf_bytes_for_widget = generate_pdf_letter(st.session_state.letter)
+                        pdf_b64_for_widget = base64.b64encode(pdf_bytes_for_widget).decode("utf-8")
+                        components.html(
+                            render_paddle_pricing_widget(
+                                pdf_b64_for_widget, st.session_state.get("app_lang", "en")
+                            ),
+                            height=650,
                         )
-                        try:
-                            followup_pdf = generate_pdf_letter(st.session_state.followup_letter)
-                            st.download_button(
-                                T("download_button_followup_pdf"),
-                                data=followup_pdf,
-                                file_name="followup_letter.pdf",
-                                mime="application/pdf",
-                            )
-                        except Exception as e:
-                            st.error(T("err_followup_pdf").format(e=e))
-
-                # ---- Add-ons purchased alongside the main letter ----
-                if "insurance" in st.session_state.purchased_addons:
-                    st.markdown("---")
-                    st.markdown(T("addon_insurance_section"))
-                    ia1, ia2, ia3 = st.columns(3)
-                    with ia1:
-                        insurer_name = st.text_input(T("addon_insurer_label"))
-                    with ia2:
-                        member_id = st.text_input(T("addon_member_id_label"))
-                    with ia3:
-                        claim_number = st.text_input(T("addon_claim_number_label"))
-
-                    if st.button(T("addon_generate_insurance_btn")):
-                        if not api_key:
-                            st.error(T("err_need_api_key"))
-                        else:
-                            try:
-                                client = Anthropic(api_key=api_key)
-                                with st.spinner(T("spinner_writing_letter")):
-                                    insurance_letter = generate_insurance_appeal_letter(
-                                        client,
-                                        sender_name,
-                                        sender_address,
-                                        sender_city_state_zip,
-                                        insurer_name,
-                                        member_id,
-                                        claim_number,
-                                        patient_name,
-                                        disputable_df,
-                                    )
-                                st.session_state.insurance_appeal_letter = insurance_letter
-                                sync_audit_to_store()
-                            except Exception as e:
-                                st.error(T("err_letter_generation").format(e=e))
-
-                    if st.session_state.get("insurance_appeal_letter"):
-                        st.text_area(
-                            T("addon_insurance_generated_label"),
-                            st.session_state.insurance_appeal_letter,
-                            height=350,
+                    except Exception as e:
+                        st.error(T("err_pdf_generation").format(e=e))
+                    st.caption(T("caption_payment_security"))
+                else:
+                    # ---- Unlocked: full letter + PDF download ----
+                    st.success(T("success_unlocked").format(plan=st.session_state.paid_plan or "standard"))
+                    st.text_area(T("label_letter_generated"), st.session_state.letter, height=420)
+                    try:
+                        pdf_bytes = generate_pdf_letter(st.session_state.letter)
+                        st.download_button(
+                            T("download_button_pdf"),
+                            data=pdf_bytes,
+                            file_name="dispute_letter.pdf",
+                            mime="application/pdf",
+                            type="primary",
                         )
-                        try:
-                            insurance_pdf = generate_pdf_letter(
-                                st.session_state.insurance_appeal_letter
-                            )
-                            st.download_button(
-                                T("addon_download_insurance_pdf"),
-                                data=insurance_pdf,
-                                file_name="insurance_appeal_letter.pdf",
-                                mime="application/pdf",
-                            )
-                        except Exception as e:
-                            st.error(T("err_pdf_generation").format(e=e))
-
-                if "phone" in st.session_state.purchased_addons:
-                    st.markdown("---")
-                    st.markdown(T("addon_phone_section"))
-                    if st.button(T("addon_generate_phone_btn")):
-                        if not api_key:
-                            st.error(T("err_need_api_key"))
-                        else:
-                            try:
-                                client = Anthropic(api_key=api_key)
-                                with st.spinner(T("spinner_writing_letter")):
-                                    phone_script = generate_phone_script(
-                                        client, patient_name, account_number, disputable_df
-                                    )
-                                st.session_state.phone_script = phone_script
-                                sync_audit_to_store()
-                            except Exception as e:
-                                st.error(T("err_letter_generation").format(e=e))
-
-                    if st.session_state.get("phone_script"):
-                        st.text_area(
-                            T("addon_phone_generated_label"),
-                            st.session_state.phone_script,
-                            height=300,
+                    except Exception as e:
+                        st.error(T("err_pdf_generation").format(e=e))
+                        st.download_button(
+                            T("download_button_txt_fallback"),
+                            data=st.session_state.letter,
+                            file_name="dispute_letter.txt",
+                            mime="text/plain",
                         )
-                        try:
-                            phone_pdf = generate_pdf_letter(st.session_state.phone_script)
-                            st.download_button(
-                                T("addon_download_phone_pdf"),
-                                data=phone_pdf,
-                                file_name="phone_script.pdf",
-                                mime="application/pdf",
-                            )
-                        except Exception as e:
-                            st.error(T("err_pdf_generation").format(e=e))
 
-    st.markdown("</div>", unsafe_allow_html=True)
+                    if st.session_state.paid_plan == "pro":
+                        st.markdown("---")
+                        st.markdown(T("pro_section_title"))
+                        if st.button(T("button_generate_followup")):
+                            if not api_key:
+                                st.error(T("err_need_api_key"))
+                            else:
+                                try:
+                                    client = Anthropic(api_key=api_key)
+                                    with st.spinner(T("spinner_writing_letter")):
+                                        followup = generate_followup_letter(
+                                            client, st.session_state.letter, letter_date
+                                        )
+                                    st.session_state.followup_letter = followup
+                                    sync_audit_to_store()
+                                except Exception as e:
+                                    st.error(T("err_followup_generation").format(e=e))
+
+                        if st.session_state.get("followup_letter"):
+                            st.text_area(
+                                T("label_followup_generated"),
+                                st.session_state.followup_letter,
+                                height=350,
+                            )
+                            try:
+                                followup_pdf = generate_pdf_letter(st.session_state.followup_letter)
+                                st.download_button(
+                                    T("download_button_followup_pdf"),
+                                    data=followup_pdf,
+                                    file_name="followup_letter.pdf",
+                                    mime="application/pdf",
+                                )
+                            except Exception as e:
+                                st.error(T("err_followup_pdf").format(e=e))
+
+                    # ---- Add-ons purchased alongside the main letter ----
+                    if "insurance" in st.session_state.purchased_addons:
+                        st.markdown("---")
+                        st.markdown(T("addon_insurance_section"))
+                        ia1, ia2, ia3 = st.columns(3)
+                        with ia1:
+                            insurer_name = st.text_input(T("addon_insurer_label"))
+                        with ia2:
+                            member_id = st.text_input(T("addon_member_id_label"))
+                        with ia3:
+                            claim_number = st.text_input(T("addon_claim_number_label"))
+
+                        if st.button(T("addon_generate_insurance_btn")):
+                            if not api_key:
+                                st.error(T("err_need_api_key"))
+                            else:
+                                try:
+                                    client = Anthropic(api_key=api_key)
+                                    with st.spinner(T("spinner_writing_letter")):
+                                        insurance_letter = generate_insurance_appeal_letter(
+                                            client,
+                                            sender_name,
+                                            sender_address,
+                                            sender_city_state_zip,
+                                            insurer_name,
+                                            member_id,
+                                            claim_number,
+                                            patient_name,
+                                            disputable_df,
+                                        )
+                                    st.session_state.insurance_appeal_letter = insurance_letter
+                                    sync_audit_to_store()
+                                except Exception as e:
+                                    st.error(T("err_letter_generation").format(e=e))
+
+                        if st.session_state.get("insurance_appeal_letter"):
+                            st.text_area(
+                                T("addon_insurance_generated_label"),
+                                st.session_state.insurance_appeal_letter,
+                                height=350,
+                            )
+                            try:
+                                insurance_pdf = generate_pdf_letter(
+                                    st.session_state.insurance_appeal_letter
+                                )
+                                st.download_button(
+                                    T("addon_download_insurance_pdf"),
+                                    data=insurance_pdf,
+                                    file_name="insurance_appeal_letter.pdf",
+                                    mime="application/pdf",
+                                )
+                            except Exception as e:
+                                st.error(T("err_pdf_generation").format(e=e))
+
+                    if "phone" in st.session_state.purchased_addons:
+                        st.markdown("---")
+                        st.markdown(T("addon_phone_section"))
+                        if st.button(T("addon_generate_phone_btn")):
+                            if not api_key:
+                                st.error(T("err_need_api_key"))
+                            else:
+                                try:
+                                    client = Anthropic(api_key=api_key)
+                                    with st.spinner(T("spinner_writing_letter")):
+                                        phone_script = generate_phone_script(
+                                            client, patient_name, account_number, disputable_df
+                                        )
+                                    st.session_state.phone_script = phone_script
+                                    sync_audit_to_store()
+                                except Exception as e:
+                                    st.error(T("err_letter_generation").format(e=e))
+
+                        if st.session_state.get("phone_script"):
+                            st.text_area(
+                                T("addon_phone_generated_label"),
+                                st.session_state.phone_script,
+                                height=300,
+                            )
+                            try:
+                                phone_pdf = generate_pdf_letter(st.session_state.phone_script)
+                                st.download_button(
+                                    T("addon_download_phone_pdf"),
+                                    data=phone_pdf,
+                                    file_name="phone_script.pdf",
+                                    mime="application/pdf",
+                                )
+                            except Exception as e:
+                                st.error(T("err_pdf_generation").format(e=e))
+
 
 # --------------------------------------------------------------------------
 # FAQ
 # --------------------------------------------------------------------------
 
-st.markdown('<div class="mb-card">', unsafe_allow_html=True)
-render_section_header("question", T("faq_title"), "❓")
-for i in range(1, 6):
-    with st.expander(T(f"faq_q{i}")):
-        st.write(T(f"faq_a{i}"))
-st.markdown("</div>", unsafe_allow_html=True)
+with st.container(border=True):
+    render_section_header("question", T("faq_title"), "❓")
+    for i in range(1, 6):
+        with st.expander(T(f"faq_q{i}")):
+            st.write(T(f"faq_a{i}"))
 
 st.markdown(
     f'<p style="text-align:center; color:#9ca3af; font-size:0.8rem; margin-top:2rem;">'
